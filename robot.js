@@ -12,22 +12,30 @@ class RobotDetector {
     
     this.refreshKnownAgents();
     this.warmupRateCounters();
+    this.initializeIntervals();
+  }
+
+  async initializeIntervals() {
+    // Set up intervals with database-configured values
+    const refreshInterval = await this.getKnownAgentsRefreshInterval();
+    const cleanupInterval = await this.getRateCounterCleanupInterval();
     
-    // Refresh known agents every minute
+    // Refresh known agents at configured interval
     setInterval(() => {
       this.refreshKnownAgents();
-    }, parseInt(process.env.KNOWN_AGENTS_REFRESH_INTERVAL || 60) * SECONDS);
+    }, refreshInterval);
     
-    // Clean up old rate limit entries every 5 minutes
+    // Clean up old rate limit entries at configured interval
     setInterval(() => {
       this.cleanupRateCounters();
-    }, 5 * 60 * SECONDS);
+    }, cleanupInterval);
   }
 
   // Warm up rate counters from database on startup
   async warmupRateCounters() {
     try {
-      const oneMinuteAgo = new Date(Date.now() - parseInt(process.env.RATE_LIMIT_SHORT_WINDOW || 60) * SECONDS);
+      const rateLimitWindow = await this.getRateLimitWindow();
+      const windowAgo = new Date(Date.now() - rateLimitWindow);
       
       const result = await db.query(
         `SELECT user_id, created_at FROM request_logs 
@@ -37,7 +45,7 @@ class RobotDetector {
          AND request_url != '/dashboard.html' 
          AND request_url != '/dashboard'
          ORDER BY created_at DESC`,
-        [oneMinuteAgo.toISOString()]
+        [windowAgo.toISOString()]
       );
       
       // Group requests by user ID
@@ -121,14 +129,15 @@ class RobotDetector {
   }
 
   // Check rate limits for a user using in-memory storage
-  checkRateLimits(userId) {
+  async checkRateLimits(userId) {
     const now = Date.now();
-    const oneMinuteAgo = now - parseInt(process.env.RATE_LIMIT_SHORT_WINDOW || 60) * SECONDS;
-    const shortLimit = parseInt(process.env.RATE_LIMIT_SHORT_MAX) || 10;
+    const rateLimitWindow = await this.getRateLimitWindow();
+    const rateLimitMax = await this.getRateLimitMax();
+    const windowAgo = now - rateLimitWindow;
 
     // Get user's timestamps, filter to recent ones
     const userTimestamps = this.userRequests.get(userId) || [];
-    const recentTimestamps = userTimestamps.filter(ts => ts > oneMinuteAgo);
+    const recentTimestamps = userTimestamps.filter(ts => ts > windowAgo);
     
     // Update the stored timestamps
     this.userRequests.set(userId, recentTimestamps);
@@ -136,9 +145,9 @@ class RobotDetector {
     const shortCount = recentTimestamps.length;
 
     return {
-      exceeded: shortCount > shortLimit,
+      exceeded: shortCount > rateLimitMax,
       shortCount,
-      shortLimit
+      shortLimit: rateLimitMax
     };
   }
 
@@ -209,7 +218,7 @@ class RobotDetector {
         redirectReason = 'Known bad user agent';
       } else {
         // Check rate limits using in-memory storage
-        const rateLimitCheck = this.checkRateLimits(userId);
+        const rateLimitCheck = await this.checkRateLimits(userId);
         if (rateLimitCheck.exceeded) {
           shouldScramble = true;
           redirectReason = `Rate limit exceeded: ${rateLimitCheck.shortCount}/${rateLimitCheck.shortLimit} (1min)`;
@@ -228,6 +237,105 @@ class RobotDetector {
       redirectReason,
       userId,
     };
+  }
+
+  // Honeypot Status Management
+  
+  async getHoneypotStatus() {
+    try {
+      const result = await db.query('SELECT value FROM settings WHERE key = ?', ['honeypot_enabled']);
+      if (result.rows.length > 0) {
+        return result.rows[0].value === 'true';
+      }
+      // Default to enabled if setting doesn't exist
+      return true;
+    } catch (error) {
+      console.error('Error getting honeypot status:', error);
+      return true; // Default to enabled on error
+    }
+  }
+
+  async setHoneypotStatus(enabled) {
+    try {
+      const value = enabled ? 'true' : 'false';
+      await db.query(`
+        INSERT OR REPLACE INTO settings (key, value, updated_at) 
+        VALUES ('honeypot_enabled', ?, datetime('now'))
+      `, [value]);
+      console.log(`Honeypot ${enabled ? 'enabled' : 'disabled'}`);
+      return true;
+    } catch (error) {
+      console.error('Error setting honeypot status:', error);
+      return false;
+    }
+  }
+
+  // Settings Management
+  
+  async getSetting(key, defaultValue = null) {
+    try {
+      const result = await db.query('SELECT value FROM settings WHERE key = ?', [key]);
+      if (result.rows.length > 0) {
+        return result.rows[0].value;
+      }
+      return defaultValue;
+    } catch (error) {
+      console.error(`Error getting setting ${key}:`, error);
+      return defaultValue;
+    }
+  }
+
+  async setSetting(key, value) {
+    try {
+      await db.query(`
+        INSERT OR REPLACE INTO settings (key, value, updated_at) 
+        VALUES (?, ?, datetime('now'))
+      `, [key, value]);
+      return true;
+    } catch (error) {
+      console.error(`Error setting ${key}:`, error);
+      return false;
+    }
+  }
+
+  async getAllSettings() {
+    try {
+      const result = await db.query('SELECT key, value FROM settings ORDER BY key');
+      const settings = {};
+      for (const row of result.rows) {
+        settings[row.key] = row.value;
+      }
+      return settings;
+    } catch (error) {
+      console.error('Error getting all settings:', error);
+      return {};
+    }
+  }
+
+  // Helper methods for specific settings with type conversion
+  
+  async getRateLimitWindow() {
+    const value = await this.getSetting('rate_limit_short_window', '60');
+    return parseInt(value) * 1000; // Convert to milliseconds
+  }
+
+  async getRateLimitMax() {
+    const value = await this.getSetting('rate_limit_short_max', '10');
+    return parseInt(value);
+  }
+
+  async getFakeServerHeader() {
+    return await this.getSetting('fake_server_header', 'Apache-Coyote/1.1');
+  }
+
+  async getKnownAgentsRefreshInterval() {
+    const value = await this.getSetting('known_agents_refresh_interval', '60');
+    return parseInt(value) * 1000; // Convert to milliseconds
+  }
+
+  async getRateCounterCleanupInterval() {
+    const value = await this.getSetting('rate_counter_cleanup_interval', '300');
+    return parseInt(value) * 1000; // Convert to milliseconds
   }
 
   // API Implementations

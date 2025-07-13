@@ -12,6 +12,8 @@ A Node.js-based honeypot system designed to detect and block web crawlers while 
 - **Real-time Dashboard**: Monitor bot activity and view statistics with API authentication
 - **Automatic Redirects**: Suspicious requests are automatically redirected to a specified URL
 - **Known Bad Agents Management**: Full CRUD operations for managing malicious user agents
+- **Honeypot Toggle**: Global on/off switch in the dashboard to disable all bot detection temporarily
+- **Advanced Content Scrambling**: Markov chain-based content deception using your blog's vocabulary
 
 ## Architecture
 
@@ -161,14 +163,23 @@ Example URL structure:
    - All requests: Log to database for analysis
 
 4. **Analytics**:
+
    - Real-time dashboard at `/dashboard.html`
    - API endpoints for statistics
    - Comprehensive request logging
+
+5. **Honeypot Control**:
+   - Global toggle to enable/disable bot detection
+   - When disabled, all requests are served normally
+   - Toggle accessible via dashboard UI or API
+   - Useful for maintenance or testing scenarios
 
 ## API Endpoints
 
 - `GET /api/stats`: Get request statistics and analytics
 - `POST /api/bad-agent`: Add a new bad user agent to the database
+- `GET /api/honeypot/status`: Get current honeypot enabled/disabled status
+- `POST /api/honeypot/toggle`: Toggle honeypot on/off (requires `enabled: boolean` in request body)
 
 ## Database Schema
 

@@ -14,8 +14,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Override server header with fake server information
-app.use((req, res, next) => {
-  const fakeServer = process.env.FAKE_SERVER_HEADER || 'Apache-Coyote/1.1';
+app.use(async (req, res, next) => {
+  const fakeServer = await robotDetector.getFakeServerHeader();
   res.set('Server', fakeServer);
   next();
 });
@@ -49,23 +49,32 @@ app.use(async (req, res, next) => {
   console.log(`Request: ${req.method} ${requestPath} from ${ipAddress} (${userAgent})`);
 
   try {
-    // Only apply robot detection to HTML requests for API and dashboard content
-    // Blog content is handled by its own middleware above  
-    if (robotDetector.isHtmlRequest(requestPath) && (requestPath.startsWith('/api/') || requestPath === '/dashboard.html' || requestPath === '/dashboard')) {
-      const result = await robotDetector.getContent(requestPath, userAgent, ipAddress, referrer, queryParams);
-      
-      if (result.shouldScramble) {
-        console.log(`Serving scrambled content: ${result.redirectReason}`);
-        const scrambledResponse = await contentScrambler.getScrambledResponse(requestPath);
-        return res.type(scrambledResponse.contentType).send(scrambledResponse.content);
-      } else if (result.shouldRedirect) {
-        console.log(`Redirecting request: ${result.redirectReason}`);
-        return res.redirect(302, result.redirectUrl);
+    // Check if honeypot is enabled
+    const honeypotEnabled = await robotDetector.getHoneypotStatus();
+    
+    if (honeypotEnabled) {
+      // Only apply robot detection to HTML requests for API and dashboard content
+      // Blog content is handled by its own middleware above  
+      if (robotDetector.isHtmlRequest(requestPath) && (requestPath.startsWith('/api/') || requestPath === '/dashboard.html' || requestPath === '/dashboard')) {
+        const result = await robotDetector.getContent(requestPath, userAgent, ipAddress, referrer, queryParams);
+        
+        if (result.shouldScramble) {
+          console.log(`Serving scrambled content: ${result.redirectReason}`);
+          const scrambledResponse = await contentScrambler.getScrambledResponse(requestPath);
+          return res.type(scrambledResponse.contentType).send(scrambledResponse.content);
+        } else if (result.shouldRedirect) {
+          console.log(`Redirecting request: ${result.redirectReason}`);
+          return res.redirect(302, result.redirectUrl);
+        }
+      } else {
+        // For non-HTML requests, still log them but don't apply restrictions
+        const userId = robotDetector.generateUserId(userAgent, ipAddress);
+        await robotDetector.logRequest(userId, userAgent, ipAddress, requestPath, referrer, false, null);
       }
     } else {
-      // For non-HTML requests, still log them but don't apply restrictions
+      // Honeypot disabled - just log the request without any restrictions
       const userId = robotDetector.generateUserId(userAgent, ipAddress);
-      await robotDetector.logRequest(userId, userAgent, ipAddress, requestPath, referrer, false, null);
+      await robotDetector.logRequest(userId, userAgent, ipAddress, requestPath, referrer, false, 'Honeypot disabled');
     }
   } catch (error) {
     console.error('Error in robot detection middleware:', error);
@@ -89,19 +98,28 @@ app.use(blogRoutePrefix, async (req, res, next) => {
   const queryParams = req.query;
 
   try {
-    // Only apply robot detection to HTML requests
-    if (robotDetector.isHtmlRequest(requestPath)) {
-      const result = await robotDetector.getContent(requestPath, userAgent, ipAddress, referrer, queryParams);
-      
-      if (result.shouldScramble) {
-        console.log(`Serving scrambled content: ${result.redirectReason}`);
-        const scrambledResponse = await contentScrambler.getScrambledResponse(requestPath);
-        return res.type(scrambledResponse.contentType).send(scrambledResponse.content);
+    // Check if honeypot is enabled
+    const honeypotEnabled = await robotDetector.getHoneypotStatus();
+    
+    if (honeypotEnabled) {
+      // Only apply robot detection to HTML requests
+      if (robotDetector.isHtmlRequest(requestPath)) {
+        const result = await robotDetector.getContent(requestPath, userAgent, ipAddress, referrer, queryParams);
+        
+        if (result.shouldScramble) {
+          console.log(`Serving scrambled content: ${result.redirectReason}`);
+          const scrambledResponse = await contentScrambler.getScrambledResponse(requestPath);
+          return res.type(scrambledResponse.contentType).send(scrambledResponse.content);
+        }
+      } else {
+        // For non-HTML requests, still log them but don't apply restrictions
+        const userId = robotDetector.generateUserId(userAgent, ipAddress);
+        await robotDetector.logRequest(userId, userAgent, ipAddress, requestPath, referrer, false, null);
       }
     } else {
-      // For non-HTML requests, still log them but don't apply restrictions
+      // Honeypot disabled - just log the request without any restrictions
       const userId = robotDetector.generateUserId(userAgent, ipAddress);
-      await robotDetector.logRequest(userId, userAgent, ipAddress, requestPath, referrer, false, null);
+      await robotDetector.logRequest(userId, userAgent, ipAddress, requestPath, referrer, false, 'Honeypot disabled');
     }
   } catch (error) {
     console.error('Error in robot detection middleware:', error);
@@ -240,6 +258,102 @@ app.patch('/api/good-agent/:id', authenticateAPI, async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
     console.error('Error updating good user agent:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// API endpoint to get honeypot status
+app.get('/api/honeypot/status', authenticateAPI, async (req, res) => {
+  try {
+    const isEnabled = await robotDetector.getHoneypotStatus();
+    res.json({ enabled: isEnabled });
+  } catch (error) {
+    console.error('Error getting honeypot status:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// API endpoint to toggle honeypot status
+app.post('/api/honeypot/toggle', authenticateAPI, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled field must be a boolean' });
+    }
+    
+    const success = await robotDetector.setHoneypotStatus(enabled);
+    if (success) {
+      res.json({ 
+        success: true, 
+        enabled: enabled, 
+        message: `Honeypot ${enabled ? 'enabled' : 'disabled'} successfully` 
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to update honeypot status' });
+    }
+  } catch (error) {
+    console.error('Error toggling honeypot status:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// API endpoint to get all settings
+app.get('/api/settings', authenticateAPI, async (req, res) => {
+  try {
+    const settings = await robotDetector.getAllSettings();
+    res.json(settings);
+  } catch (error) {
+    console.error('Error getting settings:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// API endpoint to update settings
+app.post('/api/settings', authenticateAPI, async (req, res) => {
+  try {
+    const { settings } = req.body;
+    
+    if (!settings || typeof settings !== 'object') {
+      return res.status(400).json({ error: 'settings field must be an object' });
+    }
+    
+    // Validate and update each setting
+    const results = {};
+    const validSettings = [
+      'rate_limit_short_window',
+      'rate_limit_short_max', 
+      'fake_server_header',
+      'known_agents_refresh_interval',
+      'rate_counter_cleanup_interval'
+    ];
+    
+    for (const [key, value] of Object.entries(settings)) {
+      if (!validSettings.includes(key)) {
+        results[key] = { success: false, error: 'Invalid setting key' };
+        continue;
+      }
+      
+      // Basic validation
+      if (key.includes('interval') || key.includes('window') || key.includes('max')) {
+        const numValue = parseInt(value);
+        if (isNaN(numValue) || numValue < 1) {
+          results[key] = { success: false, error: 'Must be a positive integer' };
+          continue;
+        }
+      }
+      
+      const success = await robotDetector.setSetting(key, value.toString());
+      results[key] = { success };
+    }
+    
+    res.json({ 
+      success: true, 
+      results,
+      message: 'Settings updated successfully. Server restart recommended for some changes to take effect.'
+    });
+  } catch (error) {
+    console.error('Error updating settings:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

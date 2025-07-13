@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Crawler Honeypot</title>
+    <title>Dashboard - Malfeasant</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -109,7 +109,8 @@
             font-weight: 600;
             color: #2c3e50;
         }
-        .form-group input[type="text"] {
+        .form-group input[type="text"],
+        .form-group input[type="number"] {
             width: 100%;
             padding: 8px 12px;
             border: 1px solid #ddd;
@@ -176,11 +177,96 @@
             margin: 20px 0;
             color: #856404;
         }
+        
+        /* Toggle Switch Styles */
+        .honeypot-toggle {
+            background: #e8f5e8;
+            border: 2px solid #27ae60;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .honeypot-toggle.disabled {
+            background: #ffe8e8;
+            border-color: #e74c3c;
+        }
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .toggle-switch {
+            position: relative;
+            width: 60px;
+            height: 30px;
+            background: #ccc;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .toggle-switch.active {
+            background: #27ae60;
+        }
+        .toggle-switch .toggle-slider {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+        .toggle-switch.active .toggle-slider {
+            transform: translateX(30px);
+        }
+        .toggle-label {
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+        .toggle-status {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .status-enabled {
+            color: #27ae60;
+        }
+        .status-disabled {
+            color: #e74c3c;
+        }
+        .agent-status-good {
+            background: #d4edda;
+            color: #155724;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .agent-status-bad {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .agent-status-unknown {
+            background: #f8f9fa;
+            color: #6c757d;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🍯 Crawler Honeypot Dashboard</h1>
+        <h1>😈 Malfeasant Dashboard</h1>
         
         <div id="apiKeyForm" class="api-key-form">
             <h3>🔐 API Authentication Required</h3>
@@ -192,6 +278,63 @@
         </div>
         
         <div id="dashboardContent" style="display: none;">
+            <!-- Honeypot Status Toggle -->
+            <div id="honeypotToggle" class="honeypot-toggle">
+                <div class="toggle-status">
+                    🍯 Honeypot Status: <span id="honeypotStatus" class="status-enabled">Loading...</span>
+                </div>
+                <div class="toggle-container">
+                    <span class="toggle-label">Disabled</span>
+                    <div id="toggleSwitch" class="toggle-switch" onclick="toggleHoneypot()">
+                        <div class="toggle-slider"></div>
+                    </div>
+                    <span class="toggle-label">Enabled</span>
+                </div>
+                <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                    <em>When disabled, all requests are served normally without bot detection or scrambling.</em>
+                </div>
+            </div>
+            
+            <!-- Settings Configuration -->
+            <div class="form-container">
+                <h2>⚙️ Configuration Settings</h2>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                    <div>
+                        <h4>Rate Limiting</h4>
+                        <div class="form-group">
+                            <label for="rateLimitWindow">Rate Limit Window (seconds):</label>
+                            <input type="number" id="rateLimitWindow" min="1" max="3600" placeholder="60">
+                        </div>
+                        <div class="form-group">
+                            <label for="rateLimitMax">Max Requests per Window:</label>
+                            <input type="number" id="rateLimitMax" min="1" max="1000" placeholder="10">
+                        </div>
+                    </div>
+                    <div>
+                        <h4>Server & Refresh Settings</h4>
+                        <div class="form-group">
+                            <label for="fakeServerHeader">Fake Server Header:</label>
+                            <input type="text" id="fakeServerHeader" placeholder="Apache-Coyote/1.1">
+                        </div>
+                        <div class="form-group">
+                            <label for="agentsRefreshInterval">Known Agents Refresh (seconds):</label>
+                            <input type="number" id="agentsRefreshInterval" min="10" max="3600" placeholder="60">
+                        </div>
+                        <div class="form-group">
+                            <label for="cleanupInterval">Rate Counter Cleanup (seconds):</label>
+                            <input type="number" id="cleanupInterval" min="30" max="7200" placeholder="300">
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="loadSettings()">🔄 Load Current Settings</button>
+                    <button class="btn btn-primary" onclick="saveSettings()">💾 Save Settings</button>
+                </div>
+                <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                    <em>Note: Some settings like refresh intervals may require time to take effect.</em>
+                </div>
+            </div>
+            
             <button class="refresh-btn" onclick="loadStats()">Refresh Data</button>
             
             <div id="loading" class="loading">Loading statistics...</div>
@@ -236,6 +379,7 @@
                         <tr>
                             <th>User Agent</th>
                             <th>Request Count</th>
+                            <th>Status</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -320,11 +464,14 @@
                 loadStats();
                 loadBadAgents();
                 loadGoodAgents();
+                loadHoneypotStatus();
+                loadSettings();
                 // Auto-refresh every 30 seconds
                 setInterval(() => {
                     loadStats();
                     loadBadAgents();
                     loadGoodAgents();
+                    loadHoneypotStatus();
                 }, 30000);
             }
         };
@@ -347,12 +494,15 @@
             loadStats();
             loadBadAgents();
             loadGoodAgents();
+            loadHoneypotStatus();
+            loadSettings();
             
             // Auto-refresh every 30 seconds
             setInterval(() => {
                 loadStats();
                 loadBadAgents();
                 loadGoodAgents();
+                loadHoneypotStatus();
             }, 30000);
         }
         
@@ -397,10 +547,57 @@
             document.getElementById('tables').style.display = 'none';
             
             try {
-                const response = await apiRequest('/api/stats');
-                if (!response) return;
+                // Load all data concurrently
+                const [statsResponse, badAgentsResponse, goodAgentsResponse] = await Promise.all([
+                    apiRequest('/api/stats'),
+                    apiRequest('/api/bad-agents'),
+                    apiRequest('/api/good-agents')
+                ]);
                 
-                const data = await response.json();
+                if (!statsResponse || !badAgentsResponse || !goodAgentsResponse) return;
+                
+                const [data, badAgentsData, goodAgentsData] = await Promise.all([
+                    statsResponse.json(),
+                    badAgentsResponse.json(),
+                    goodAgentsResponse.json()
+                ]);
+                
+                // Create lookup maps for agent status
+                const badAgents = new Set();
+                const goodAgents = new Set();
+                
+                badAgentsData.badAgents?.forEach(agent => {
+                    if (agent.is_active) {
+                        badAgents.add(agent.user_agent.toLowerCase());
+                    }
+                });
+                
+                goodAgentsData.goodAgents?.forEach(agent => {
+                    if (agent.is_active) {
+                        goodAgents.add(agent.user_agent.toLowerCase());
+                    }
+                });
+                
+                // Function to determine agent status
+                function getAgentStatus(userAgent) {
+                    const ua = userAgent.toLowerCase();
+                    
+                    // Check if it matches any bad agent pattern
+                    for (let badPattern of badAgents) {
+                        if (ua.includes(badPattern)) {
+                            return 'bad';
+                        }
+                    }
+                    
+                    // Check if it matches any good agent pattern
+                    for (let goodPattern of goodAgents) {
+                        if (ua.includes(goodPattern)) {
+                            return 'good';
+                        }
+                    }
+                    
+                    return 'unknown';
+                }
                 
                 // Update statistics
                 document.getElementById('totalRequests').textContent = data.totalRequests;
@@ -410,13 +607,24 @@
                     ((data.blockedRequests / data.totalRequests) * 100).toFixed(1) : 0;
                 document.getElementById('blockRate').textContent = blockRate + '%';
                 
-                // Update top user agents table
+                // Update top user agents table with status
                 const userAgentsTable = document.getElementById('userAgentsTable').getElementsByTagName('tbody')[0];
                 userAgentsTable.innerHTML = '';
                 data.topUserAgents.forEach(agent => {
                     const row = userAgentsTable.insertRow();
                     row.insertCell(0).textContent = agent.user_agent;
                     row.insertCell(1).textContent = agent.count;
+                    
+                    const statusCell = row.insertCell(2);
+                    const status = getAgentStatus(agent.user_agent);
+                    
+                    if (status === 'good') {
+                        statusCell.innerHTML = '<span class="agent-status-good">GOOD</span>';
+                    } else if (status === 'bad') {
+                        statusCell.innerHTML = '<span class="agent-status-bad">BAD</span>';
+                    } else {
+                        statusCell.innerHTML = '<span class="agent-status-unknown">UNKNOWN</span>';
+                    }
                 });
                 
                 // Update recent requests table
@@ -693,6 +901,150 @@
             } catch (error) {
                 console.error('Error updating good agent:', error);
                 showAlert('Error updating good agent', 'error');
+            }
+        }
+
+        // Honeypot Status Management
+        let honeypotEnabled = true; // Default assumption
+        
+        async function loadHoneypotStatus() {
+            try {
+                const response = await apiRequest('/api/honeypot/status');
+                if (!response) return;
+                
+                const data = await response.json();
+                honeypotEnabled = data.enabled;
+                updateHoneypotUI();
+            } catch (error) {
+                console.error('Error loading honeypot status:', error);
+                showAlert('Error loading honeypot status', 'error');
+            }
+        }
+        
+        function updateHoneypotUI() {
+            const statusElement = document.getElementById('honeypotStatus');
+            const toggleElement = document.getElementById('toggleSwitch');
+            const containerElement = document.getElementById('honeypotToggle');
+            
+            if (honeypotEnabled) {
+                statusElement.textContent = 'ENABLED';
+                statusElement.className = 'status-enabled';
+                toggleElement.classList.add('active');
+                containerElement.classList.remove('disabled');
+            } else {
+                statusElement.textContent = 'DISABLED';
+                statusElement.className = 'status-disabled';
+                toggleElement.classList.remove('active');
+                containerElement.classList.add('disabled');
+            }
+        }
+        
+        async function toggleHoneypot() {
+            try {
+                const newStatus = !honeypotEnabled;
+                
+                const response = await apiRequest('/api/honeypot/toggle', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ enabled: newStatus })
+                });
+                
+                if (!response) return;
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    honeypotEnabled = newStatus;
+                    updateHoneypotUI();
+                    showAlert(data.message, 'success');
+                } else {
+                    showAlert('Failed to toggle honeypot status', 'error');
+                }
+            } catch (error) {
+                console.error('Error toggling honeypot:', error);
+                showAlert('Error toggling honeypot status', 'error');
+            }
+        }
+
+        // Settings Management Functions
+        let currentSettings = {};
+        
+        async function loadSettings() {
+            try {
+                const response = await apiRequest('/api/settings');
+                if (!response) return;
+                
+                currentSettings = await response.json();
+                
+                // Populate form fields
+                document.getElementById('rateLimitWindow').value = currentSettings.rate_limit_short_window || '';
+                document.getElementById('rateLimitMax').value = currentSettings.rate_limit_short_max || '';
+                document.getElementById('fakeServerHeader').value = currentSettings.fake_server_header || '';
+                document.getElementById('agentsRefreshInterval').value = currentSettings.known_agents_refresh_interval || '';
+                document.getElementById('cleanupInterval').value = currentSettings.rate_counter_cleanup_interval || '';
+                
+                showAlert('Settings loaded successfully');
+            } catch (error) {
+                console.error('Error loading settings:', error);
+                showAlert('Error loading settings', 'error');
+            }
+        }
+        
+        async function saveSettings() {
+            try {
+                const settings = {};
+                
+                // Collect form values
+                const rateLimitWindow = document.getElementById('rateLimitWindow').value.trim();
+                const rateLimitMax = document.getElementById('rateLimitMax').value.trim();
+                const fakeServerHeader = document.getElementById('fakeServerHeader').value.trim();
+                const agentsRefreshInterval = document.getElementById('agentsRefreshInterval').value.trim();
+                const cleanupInterval = document.getElementById('cleanupInterval').value.trim();
+                
+                // Only include changed values
+                if (rateLimitWindow && rateLimitWindow !== currentSettings.rate_limit_short_window) {
+                    settings.rate_limit_short_window = rateLimitWindow;
+                }
+                if (rateLimitMax && rateLimitMax !== currentSettings.rate_limit_short_max) {
+                    settings.rate_limit_short_max = rateLimitMax;
+                }
+                if (fakeServerHeader && fakeServerHeader !== currentSettings.fake_server_header) {
+                    settings.fake_server_header = fakeServerHeader;
+                }
+                if (agentsRefreshInterval && agentsRefreshInterval !== currentSettings.known_agents_refresh_interval) {
+                    settings.known_agents_refresh_interval = agentsRefreshInterval;
+                }
+                if (cleanupInterval && cleanupInterval !== currentSettings.rate_counter_cleanup_interval) {
+                    settings.rate_counter_cleanup_interval = cleanupInterval;
+                }
+                
+                if (Object.keys(settings).length === 0) {
+                    showAlert('No changes detected', 'error');
+                    return;
+                }
+                
+                const response = await apiRequest('/api/settings', {
+                    method: 'POST',
+                    body: JSON.stringify({ settings })
+                });
+                
+                if (!response) return;
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert('Settings updated successfully');
+                    // Update current settings cache
+                    Object.assign(currentSettings, settings);
+                } else {
+                    showAlert('Error updating some settings', 'error');
+                    console.error('Settings update results:', result.results);
+                }
+            } catch (error) {
+                console.error('Error saving settings:', error);
+                showAlert('Error saving settings', 'error');
             }
         }
     </script>
