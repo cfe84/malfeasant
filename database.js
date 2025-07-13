@@ -1,22 +1,23 @@
 const { Pool } = require('pg');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
-require('dotenv').config();
 
 class DatabaseAdapter {
-  constructor() {
-    this.dbType = process.env.DB_TYPE || 'sqlite';
+  constructor(config = null) {
+    const dbConfig = config?.getDatabaseConfig() || { type: 'sqlite', path: './honeypot.db' };
+    this.dbType = dbConfig.type;
+    this.dbConfig = dbConfig;
     this.initializeDatabase();
   }
 
   initializeDatabase() {
     if (this.dbType === 'postgres') {
       this.pool = new Pool({
-        host: process.env.DB_HOST,
-        port: process.env.DB_PORT,
-        database: process.env.DB_NAME,
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
+        host: this.dbConfig.host,
+        port: this.dbConfig.port,
+        database: this.dbConfig.database,
+        user: this.dbConfig.user,
+        password: this.dbConfig.password,
       });
 
       this.pool.on('connect', () => {
@@ -28,7 +29,7 @@ class DatabaseAdapter {
       });
     } else {
       // SQLite
-      const dbPath = process.env.SQLITE_DB_PATH || './honeypot.db';
+      const dbPath = this.dbConfig.path || './honeypot.db';
       this.db = new sqlite3.Database(dbPath, (err) => {
         if (err) {
           console.error('SQLite connection error:', err);
@@ -103,6 +104,4 @@ class DatabaseAdapter {
   }
 }
 
-const db = new DatabaseAdapter();
-
-module.exports = db;
+module.exports = DatabaseAdapter;

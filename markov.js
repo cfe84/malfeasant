@@ -3,11 +3,11 @@ const path = require('path');
 const SeededRandom = require('./seeded-random');
 
 class MarkovChain {
-  constructor() {
+  constructor(config = null) {
     this.chains = new Map(); // word -> {nextWord: count, ...}
     this.totalTransitions = 0;
     this.words = new Set(); // all unique words
-    this.blogStaticDir = path.join(__dirname, process.env.BLOG_STATIC_DIR || 'blog');
+    this.blogStaticDir = config?.paths?.blogStaticDir || path.resolve('blog');
     this.isIndexed = false;
   }
 
@@ -280,4 +280,4 @@ class MarkovChain {
   }
 }
 
-module.exports = new MarkovChain();
+module.exports = MarkovChain;

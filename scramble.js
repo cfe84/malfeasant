@@ -1,12 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const markovChain = require('./markov');
+const MarkovChain = require('./markov');
 const SeededRandom = require('./seeded-random');
 
 class ContentScrambler {
-  constructor() {
-    this.blogStaticDir = path.join(__dirname, process.env.BLOG_STATIC_DIR || 'blog');
+  constructor(config = null) {
+    this.blogStaticDir = config?.paths?.blogStaticDir || path.resolve('blog');
+    this.markovChain = new MarkovChain(config);
     this.initializeMarkovIndex();
   }
 
@@ -15,8 +16,8 @@ class ContentScrambler {
    */
   async initializeMarkovIndex() {
     try {
-      await markovChain.buildIndex();
-      const stats = markovChain.getStats();
+      await this.markovChain.buildIndex();
+      const stats = this.markovChain.getStats();
       console.log(`Markov scrambler ready: ${stats.totalWords} words, ${stats.totalTransitions} transitions`);
     } catch (error) {
       console.error('Error initializing Markov index:', error);
@@ -64,7 +65,7 @@ class ContentScrambler {
     words.forEach((wordInfo, wordIndex) => {
       // Create a unique seed for each word position by combining original seed with word index and text position
       const wordSeed = seed + wordIndex.toString() + wordInfo.index.toString() + text.length.toString();
-      const replacementWords = markovChain.generateWords(1, wordSeed);
+      const replacementWords = this.markovChain.generateWords(1, wordSeed);
       
       if (replacementWords.length > 0 && replacementWords[0] && typeof replacementWords[0] === 'string') {
         // Preserve original capitalization pattern
@@ -209,13 +210,13 @@ class ContentScrambler {
     // Generate realistic words for the title and content
     const seededRandom = new SeededRandom(seed);
 
-    const titleWords = markovChain.generateWords(seededRandom.randomInt(3, 12), seed + '_title');
+    const titleWords = this.markovChain.generateWords(seededRandom.randomInt(3, 12), seed + '_title');
     const title = `${titleWords[0].charAt(0).toUpperCase() + titleWords[0].slice(1)} ${titleWords[1]} ${titleWords[2]} - ${requestPath}`;
     const paragraphs = [];
     const paragraphCount = seededRandom.randomInt(5, 30);
 
     for (let i = 0; i < paragraphCount; i++) {
-      const contentWords = markovChain.generateWords(seededRandom.randomInt(15, 30), seed + '_content_' + i);
+      const contentWords = this.markovChain.generateWords(seededRandom.randomInt(15, 30), seed + '_content_' + i);
       paragraphs.push(this.formatSentences(contentWords));
     }
 
@@ -338,7 +339,7 @@ class ContentScrambler {
     
     for (let i = 0; i < 5; i++) {
       const wordCount = seededRandom.randomInt(4, 6); // 4 to 5 words
-      const words = markovChain.generateWords(wordCount, seed + '_link_' + i);
+      const words = this.markovChain.generateWords(wordCount, seed + '_link_' + i);
       const title = words.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
       const url = `/blog/${words.join('-')}/`;
       
@@ -390,4 +391,4 @@ class ContentScrambler {
   }
 }
 
-module.exports = new ContentScrambler();
+module.exports = ContentScrambler;

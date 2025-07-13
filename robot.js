@@ -1,10 +1,15 @@
 const crypto = require('crypto');
-const db = require('./database');
+const DatabaseAdapter = require('./database');
 
 const SECONDS = 1000;
 
 class RobotDetector {
-  constructor() {
+  constructor(config = null) {
+    this.config = config;
+    this.db = new DatabaseAdapter(config);
+    this.honeypotSecret = config?.security?.honeypotSecret || 'default-honeypot-secret';
+    this.rateLimitShortWindow = config?.security?.rateLimitShortWindow || 60;
+    
     this.knownBadAgents = new Set();
     this.knownGoodAgents = new Set();
     // In-memory storage for rate limiting
@@ -37,7 +42,7 @@ class RobotDetector {
       const rateLimitWindow = await this.getRateLimitWindow();
       const windowAgo = new Date(Date.now() - rateLimitWindow);
       
-      const result = await db.query(
+      const result = await this.db.query(
         `SELECT user_id, created_at FROM request_logs 
          WHERE created_at > ? 
          AND (request_url LIKE '%.html' OR request_url = '/' OR request_url NOT LIKE '%.%')
@@ -67,7 +72,7 @@ class RobotDetector {
 
   // Clean up old entries from rate counters
   cleanupRateCounters() {
-    const oneMinuteAgo = Date.now() - parseInt(process.env.RATE_LIMIT_SHORT_WINDOW || 60) * SECONDS;
+    const oneMinuteAgo = Date.now() - this.rateLimitShortWindow * SECONDS;
     let cleanedUsers = 0;
     
     for (const [userId, timestamps] of this.userRequests.entries()) {
@@ -91,11 +96,11 @@ class RobotDetector {
   async refreshKnownAgents() {
     try {
       // Load bad agents
-      const badAgentsResult = await db.query('SELECT user_agent FROM known_bad_agents WHERE is_active = ?', [true]);
+      const badAgentsResult = await this.db.query('SELECT user_agent FROM known_bad_agents WHERE is_active = ?', [true]);
       this.knownBadAgents = new Set(badAgentsResult.rows.map(row => row.user_agent.toLowerCase()));
       
       // Load good agents
-      const goodAgentsResult = await db.query('SELECT user_agent FROM known_good_agents WHERE is_active = ?', [true]);
+      const goodAgentsResult = await this.db.query('SELECT user_agent FROM known_good_agents WHERE is_active = ?', [true]);
       this.knownGoodAgents = new Set(goodAgentsResult.rows.map(row => row.user_agent.toLowerCase()));
       
       console.log(`Refreshed ${this.knownBadAgents.size} known bad agents and ${this.knownGoodAgents.size} known good agents`);
@@ -107,7 +112,7 @@ class RobotDetector {
   // Generate a user ID based on user agent and IP address
   generateUserId(userAgent, ipAddress) {
     const hash = crypto.createHash('sha256');
-    hash.update(userAgent + ipAddress + process.env.HONEYPOT_SECRET);
+    hash.update(userAgent + ipAddress + this.honeypotSecret);
     return hash.digest('hex').substring(0, 16);
   }
 
@@ -164,7 +169,7 @@ class RobotDetector {
     try {
       const now = new Date();
 
-      await db.query(
+      await this.db.query(
         `INSERT INTO request_logs 
          (user_id, user_agent, ip_address, request_url, referrer, was_request_redirected, block_reason, created_at) 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -243,7 +248,7 @@ class RobotDetector {
   
   async getHoneypotStatus() {
     try {
-      const result = await db.query('SELECT value FROM settings WHERE key = ?', ['honeypot_enabled']);
+      const result = await this.db.query('SELECT value FROM settings WHERE key = ?', ['honeypot_enabled']);
       if (result.rows.length > 0) {
         return result.rows[0].value === 'true';
       }
@@ -258,7 +263,7 @@ class RobotDetector {
   async setHoneypotStatus(enabled) {
     try {
       const value = enabled ? 'true' : 'false';
-      await db.query(`
+      await this.db.query(`
         INSERT OR REPLACE INTO settings (key, value, updated_at) 
         VALUES ('honeypot_enabled', ?, datetime('now'))
       `, [value]);
@@ -274,7 +279,7 @@ class RobotDetector {
   
   async getSetting(key, defaultValue = null) {
     try {
-      const result = await db.query('SELECT value FROM settings WHERE key = ?', [key]);
+      const result = await this.db.query('SELECT value FROM settings WHERE key = ?', [key]);
       if (result.rows.length > 0) {
         return result.rows[0].value;
       }
@@ -287,7 +292,7 @@ class RobotDetector {
 
   async setSetting(key, value) {
     try {
-      await db.query(`
+      await this.db.query(`
         INSERT OR REPLACE INTO settings (key, value, updated_at) 
         VALUES (?, ?, datetime('now'))
       `, [key, value]);
@@ -300,7 +305,7 @@ class RobotDetector {
 
   async getAllSettings() {
     try {
-      const result = await db.query('SELECT key, value FROM settings ORDER BY key');
+      const result = await this.db.query('SELECT key, value FROM settings ORDER BY key');
       const settings = {};
       for (const row of result.rows) {
         settings[row.key] = row.value;
@@ -343,13 +348,13 @@ class RobotDetector {
   async getStats() {
     try {
       // Get total requests
-      const totalRequests = await db.query('SELECT COUNT(*) as count FROM request_logs');
+      const totalRequests = await this.db.query('SELECT COUNT(*) as count FROM request_logs');
       
       // Get blocked requests
-      const blockedRequests = await db.query('SELECT COUNT(*) as count FROM request_logs WHERE was_request_redirected = ?', [1]);
+      const blockedRequests = await this.db.query('SELECT COUNT(*) as count FROM request_logs WHERE was_request_redirected = ?', [1]);
       
       // Get block reasons breakdown
-      const blockReasons = await db.query(`
+      const blockReasons = await this.db.query(`
         SELECT block_reason, COUNT(*) as count 
         FROM request_logs 
         WHERE was_request_redirected = 1 AND block_reason IS NOT NULL
@@ -358,7 +363,7 @@ class RobotDetector {
       `);
       
       // Get top user agents
-      const topUserAgents = await db.query(`
+      const topUserAgents = await this.db.query(`
         SELECT user_agent, COUNT(*) as count 
         FROM request_logs 
         GROUP BY user_agent 
@@ -367,7 +372,7 @@ class RobotDetector {
       `);
       
       // Get recent requests with block reasons
-      const recentRequests = await db.query(`
+      const recentRequests = await this.db.query(`
         SELECT ip_address, user_agent, request_url, was_request_redirected, block_reason, created_at 
         FROM request_logs 
         ORDER BY created_at DESC 
@@ -394,12 +399,12 @@ class RobotDetector {
       }
 
       if (db.dbType === 'sqlite') {
-        await db.query(
+        await this.db.query(
           'INSERT OR REPLACE INTO known_bad_agents (user_agent, is_active) VALUES (?, ?)',
           [userAgent, 1]
         );
       } else {
-        await db.query(
+        await this.db.query(
           'INSERT INTO known_bad_agents (user_agent, is_active) VALUES (?, ?) ON CONFLICT (user_agent) DO UPDATE SET is_active = ?',
           [userAgent, true, true]
         );
@@ -417,7 +422,7 @@ class RobotDetector {
 
   async getBadAgents() {
     try {
-      const result = await db.query('SELECT id, user_agent, is_active, created_at FROM known_bad_agents ORDER BY created_at DESC');
+      const result = await this.db.query('SELECT id, user_agent, is_active, created_at FROM known_bad_agents ORDER BY created_at DESC');
       return { badAgents: result.rows };
     } catch (error) {
       console.error('Error getting bad agents:', error);
@@ -431,7 +436,7 @@ class RobotDetector {
         throw new Error('Agent ID is required');
       }
 
-      await db.query('DELETE FROM known_bad_agents WHERE id = ?', [id]);
+      await this.db.query('DELETE FROM known_bad_agents WHERE id = ?', [id]);
       
       // Refresh the known agents cache
       await this.refreshKnownAgents();
@@ -450,7 +455,7 @@ class RobotDetector {
       }
 
       const activeValue = db.dbType === 'sqlite' ? (isActive ? 1 : 0) : isActive;
-      await db.query('UPDATE known_bad_agents SET is_active = ? WHERE id = ?', [activeValue, id]);
+      await this.db.query('UPDATE known_bad_agents SET is_active = ? WHERE id = ?', [activeValue, id]);
       
       // Refresh the known agents cache
       await this.refreshKnownAgents();
@@ -471,12 +476,12 @@ class RobotDetector {
       }
 
       if (db.dbType === 'sqlite') {
-        await db.query(
+        await this.db.query(
           'INSERT OR REPLACE INTO known_good_agents (user_agent, is_active) VALUES (?, ?)',
           [userAgent, 1]
         );
       } else {
-        await db.query(
+        await this.db.query(
           'INSERT INTO known_good_agents (user_agent, is_active) VALUES (?, ?) ON CONFLICT (user_agent) DO UPDATE SET is_active = ?',
           [userAgent, true, true]
         );
@@ -494,7 +499,7 @@ class RobotDetector {
 
   async getGoodAgents() {
     try {
-      const result = await db.query('SELECT id, user_agent, is_active, created_at FROM known_good_agents ORDER BY created_at DESC');
+      const result = await this.db.query('SELECT id, user_agent, is_active, created_at FROM known_good_agents ORDER BY created_at DESC');
       return { goodAgents: result.rows };
     } catch (error) {
       console.error('Error getting good agents:', error);
@@ -508,7 +513,7 @@ class RobotDetector {
         throw new Error('Agent ID is required');
       }
 
-      await db.query('DELETE FROM known_good_agents WHERE id = ?', [id]);
+      await this.db.query('DELETE FROM known_good_agents WHERE id = ?', [id]);
       
       // Refresh the known agents cache
       await this.refreshKnownAgents();
@@ -527,7 +532,7 @@ class RobotDetector {
       }
 
       const activeValue = db.dbType === 'sqlite' ? (isActive ? 1 : 0) : isActive;
-      await db.query('UPDATE known_good_agents SET is_active = ? WHERE id = ?', [activeValue, id]);
+      await this.db.query('UPDATE known_good_agents SET is_active = ? WHERE id = ?', [activeValue, id]);
       
       // Refresh the known agents cache
       await this.refreshKnownAgents();
@@ -540,4 +545,4 @@ class RobotDetector {
   }
 }
 
-module.exports = new RobotDetector();
+module.exports = RobotDetector;

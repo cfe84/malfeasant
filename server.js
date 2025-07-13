@@ -1,12 +1,44 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
-const robotDetector = require('./robot');
-const contentScrambler = require('./scramble');
-require('dotenv').config();
+const config = require('./config');
+const RobotDetector = require('./robot');
+const ContentScrambler = require('./scramble');
 
 const app = express();
-const port = process.env.PORT || 3000;
+
+// Validate configuration
+const validation = config.validate();
+if (!validation.isValid) {
+  console.error('Configuration validation failed:');
+  validation.errors.forEach(error => console.error('  ERROR:', error));
+  process.exit(1);
+}
+
+if (validation.warnings.length > 0) {
+  console.warn('Configuration warnings:');
+  validation.warnings.forEach(warning => console.warn('  WARNING:', warning));
+}
+
+// Initialize instances with configuration
+const robotDetector = new RobotDetector(config);
+const contentScrambler = new ContentScrambler(config);
+
+// Utility function to format error responses
+function formatErrorResponse(error, isDev = false) {
+  if (isDev) {
+    return {
+      error: 'Internal server error',
+      message: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    };
+  } else {
+    return {
+      error: 'Internal server error'
+    };
+  }
+}
 
 // Middleware
 app.use(cors());
@@ -24,12 +56,12 @@ app.use(async (req, res, next) => {
 app.set('trust proxy', true);
 
 // Static files for HP management.
-const publicDir = path.join(__dirname, 'public');
+const publicDir = config.paths.publicDir;
 
 // API Authentication middleware
 const authenticateAPI = (req, res, next) => {
   const apiSecret = req.get('X-API-Secret');
-  const expectedSecret = process.env.API_SECRET;
+  const expectedSecret = config.server.apiSecret;
   
   if (!apiSecret || apiSecret !== expectedSecret) {
     return res.status(401).json({ error: 'Unauthorized - Invalid API secret' });
@@ -85,9 +117,9 @@ app.use(async (req, res, next) => {
 });
 
 // Set up static content directories
-const honeypotStaticDir = path.join(__dirname, process.env.HONEYPOT_STATIC_DIR || 'public');
-const blogStaticDir = path.join(__dirname, process.env.BLOG_STATIC_DIR || 'blog');
-const blogRoutePrefix = process.env.BLOG_ROUTE_PREFIX || '/blog';
+const honeypotStaticDir = config.paths.honeypotStaticDir;
+const blogStaticDir = config.paths.blogStaticDir;
+const blogRoutePrefix = config.routes.blogRoutePrefix;
 
 // Custom static file handler that respects robot detection
 app.use(blogRoutePrefix, async (req, res, next) => {
@@ -140,7 +172,7 @@ app.get('/api/stats', authenticateAPI, async (req, res) => {
     res.json(stats);
   } catch (error) {
     console.error('Error getting stats:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(formatErrorResponse(error, config.server.isDevelopment));
   }
 });
 
@@ -155,7 +187,7 @@ app.post('/api/bad-agent', authenticateAPI, async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
     console.error('Error adding bad user agent:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(formatErrorResponse(error, config.server.isDevelopment));
   }
 });
 
@@ -166,7 +198,7 @@ app.get('/api/bad-agents', authenticateAPI, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error getting bad agents:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(formatErrorResponse(error, config.server.isDevelopment));
   }
 });
 
@@ -181,7 +213,7 @@ app.delete('/api/bad-agent/:id', authenticateAPI, async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
     console.error('Error deleting bad user agent:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(formatErrorResponse(error, config.server.isDevelopment));
   }
 });
 
@@ -198,7 +230,7 @@ app.patch('/api/bad-agent/:id', authenticateAPI, async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
     console.error('Error updating bad user agent:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(formatErrorResponse(error, config.server.isDevelopment));
   }
 });
 
@@ -215,7 +247,7 @@ app.post('/api/good-agent', authenticateAPI, async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
     console.error('Error adding good user agent:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(formatErrorResponse(error, config.server.isDevelopment));
   }
 });
 
@@ -226,7 +258,7 @@ app.get('/api/good-agents', authenticateAPI, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error getting good agents:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(formatErrorResponse(error, config.server.isDevelopment));
   }
 });
 
@@ -241,7 +273,7 @@ app.delete('/api/good-agent/:id', authenticateAPI, async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
     console.error('Error deleting good user agent:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(formatErrorResponse(error, config.server.isDevelopment));
   }
 });
 
@@ -258,7 +290,7 @@ app.patch('/api/good-agent/:id', authenticateAPI, async (req, res) => {
       return res.status(400).json({ error: error.message });
     }
     console.error('Error updating good user agent:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(formatErrorResponse(error, config.server.isDevelopment));
   }
 });
 
@@ -269,7 +301,7 @@ app.get('/api/honeypot/status', authenticateAPI, async (req, res) => {
     res.json({ enabled: isEnabled });
   } catch (error) {
     console.error('Error getting honeypot status:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(formatErrorResponse(error, config.server.isDevelopment));
   }
 });
 
@@ -294,7 +326,7 @@ app.post('/api/honeypot/toggle', authenticateAPI, async (req, res) => {
     }
   } catch (error) {
     console.error('Error toggling honeypot status:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(formatErrorResponse(error, config.server.isDevelopment));
   }
 });
 
@@ -305,7 +337,7 @@ app.get('/api/settings', authenticateAPI, async (req, res) => {
     res.json(settings);
   } catch (error) {
     console.error('Error getting settings:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(formatErrorResponse(error, config.server.isDevelopment));
   }
 });
 
@@ -354,23 +386,19 @@ app.post('/api/settings', authenticateAPI, async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating settings:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json(formatErrorResponse(error, config.server.isDevelopment));
   }
 });
 
 // Handle 404 for missing static files
 app.use((req, res) => {
-  const custom404Page = process.env.CUSTOM_404_PAGE;
+  const custom404Page = config.paths.custom404Page;
   
   if (custom404Page) {
-    // Try to serve custom 404 page from blog directory
-    const blogStaticDir = path.join(__dirname, process.env.BLOG_STATIC_DIR || 'blog');
-    const custom404Path = path.join(blogStaticDir, custom404Page);
-    
     // Check if custom 404 file exists and serve it
     const fs = require('fs');
-    if (fs.existsSync(custom404Path)) {
-      return res.status(404).sendFile(custom404Path);
+    if (fs.existsSync(custom404Page)) {
+      return res.status(404).sendFile(custom404Page);
     }
   }
   
@@ -381,10 +409,21 @@ app.use((req, res) => {
 // Error handling middleware
 app.use((error, req, res, next) => {
   console.error('Server error:', error);
-  res.status(500).send('Internal Server Error');
+  
+  // Send detailed error information in development
+  const errorResponse = formatErrorResponse(error, config.server.isDevelopment);
+  
+  if (req.accepts('json')) {
+    res.status(500).json(errorResponse);
+  } else {
+    res.status(500).send(config.server.isDevelopment ? 
+      `Internal Server Error\n\nError: ${error.message}\n\nStack:\n${error.stack}` : 
+      'Internal Server Error'
+    );
+  }
 });
 
-app.listen(port, () => {
-  console.log(`Crawler honeypot server running at http://localhost:${port}`);
-  console.log(`Environment: ${process.env.NODE_ENV}`);
+app.listen(config.server.port, () => {
+  console.log(`Crawler honeypot server running at http://localhost:${config.server.port}`);
+  console.log(`Environment: ${config.server.nodeEnv}`);
 });
