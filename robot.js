@@ -105,7 +105,14 @@ class RobotDetector {
 
   // Check if user agent is in known bad agents list
   isKnownBadAgent(userAgent) {
-    return this.knownBadAgents.has(userAgent.toLowerCase());
+    const lowercaseUserAgent = userAgent.toLowerCase();
+    // Check if any of the known bad agent patterns are contained in the user agent
+    for (const badAgent of this.knownBadAgents) {
+      if (lowercaseUserAgent.includes(badAgent)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // Check if user agent is in known good agents list
@@ -161,8 +168,11 @@ class RobotDetector {
 
   // Check if request is for HTML content
   isHtmlRequest(path) {
-    return path === '/' || path.endsWith('.html') || path.endsWith('.htm') || 
-           (!path.includes('.') && !path.endsWith('/'));
+    return path === '/' || 
+           path.endsWith('.html') || 
+           path.endsWith('.htm') || 
+           path.endsWith('/') ||
+           (!path.includes('.'));
   }
 
   // Check if request should be excluded from rate limiting
@@ -177,12 +187,12 @@ class RobotDetector {
   // Main function to determine if request should be blocked/redirected
   async getContent(path, userAgent, ipAddress, referrer = '', queryParams = {}) {
     const userId = this.generateUserId(userAgent, ipAddress);
-    let shouldRedirect = false;
     let shouldScramble = false;
     let redirectReason = '';
 
     // Check for scramble parameter - always block if present
     if (queryParams.scramble !== undefined) {
+      console.log(`Scramble parameter detected in request: ${path}`);
       shouldScramble = true;
       redirectReason = 'Scramble parameter detected';
     }
@@ -211,14 +221,12 @@ class RobotDetector {
     }
 
     // Log the request to database for analytics
-    await this.logRequest(userId, userAgent, ipAddress, path, referrer, shouldScramble || shouldRedirect, redirectReason);
+    await this.logRequest(userId, userAgent, ipAddress, path, referrer, shouldScramble, redirectReason);
 
     return {
-      shouldRedirect,
       shouldScramble,
       redirectReason,
       userId,
-      redirectUrl: process.env.REDIRECT_URL || 'https://example.com/blocked'
     };
   }
 

@@ -1,6 +1,6 @@
 # Malfeasant
 
-A Node.js-based honeypot system designed to detect and block web crawlers while allowing legitimate visitors to access your blog content, freely inspired from [Spigot](https://www.ty-penguin.org.uk/~auj/spigot/)
+A Node.js-based honeypot system designed to detect and block web crawlers while allowing legitimate visitors to access your blog content, freely inspired from [Spigot](https://www.ty-penguin.org.uk/~auj/spigot/). Mostly "vibe-coded" for maximum irony.
 
 ## Features
 

@@ -38,7 +38,7 @@ const authenticateAPI = (req, res, next) => {
   next();
 };
 
-// Middleware to handle robot detection for HTML content
+// Middleware to handle robot detection for HTML content (for honeypot static content only)
 app.use(async (req, res, next) => {
   const userAgent = req.get('User-Agent') || '';
   const ipAddress = req.ip || req.connection.remoteAddress;
@@ -49,8 +49,9 @@ app.use(async (req, res, next) => {
   console.log(`Request: ${req.method} ${requestPath} from ${ipAddress} (${userAgent})`);
 
   try {
-    // Only apply robot detection to HTML requests
-    if (robotDetector.isHtmlRequest(requestPath)) {
+    // Only apply robot detection to HTML requests for API and dashboard content
+    // Blog content is handled by its own middleware above  
+    if (robotDetector.isHtmlRequest(requestPath) && (requestPath.startsWith('/api/') || requestPath === '/dashboard.html' || requestPath === '/dashboard')) {
       const result = await robotDetector.getContent(requestPath, userAgent, ipAddress, referrer, queryParams);
       
       if (result.shouldScramble) {
@@ -79,8 +80,37 @@ const honeypotStaticDir = path.join(__dirname, process.env.HONEYPOT_STATIC_DIR |
 const blogStaticDir = path.join(__dirname, process.env.BLOG_STATIC_DIR || 'blog');
 const blogRoutePrefix = process.env.BLOG_ROUTE_PREFIX || '/blog';
 
-// Serve blog static files at the blog route prefix
-app.use(blogRoutePrefix, express.static(blogStaticDir));
+// Custom static file handler that respects robot detection
+app.use(blogRoutePrefix, async (req, res, next) => {
+  const userAgent = req.get('User-Agent') || '';
+  const ipAddress = req.ip || req.connection.remoteAddress;
+  const referrer = req.get('Referer') || '';
+  const requestPath = req.path;
+  const queryParams = req.query;
+
+  try {
+    // Only apply robot detection to HTML requests
+    if (robotDetector.isHtmlRequest(requestPath)) {
+      const result = await robotDetector.getContent(requestPath, userAgent, ipAddress, referrer, queryParams);
+      
+      if (result.shouldScramble) {
+        console.log(`Serving scrambled content: ${result.redirectReason}`);
+        const scrambledResponse = await contentScrambler.getScrambledResponse(requestPath);
+        return res.type(scrambledResponse.contentType).send(scrambledResponse.content);
+      }
+    } else {
+      // For non-HTML requests, still log them but don't apply restrictions
+      const userId = robotDetector.generateUserId(userAgent, ipAddress);
+      await robotDetector.logRequest(userId, userAgent, ipAddress, requestPath, referrer, false, null);
+    }
+  } catch (error) {
+    console.error('Error in robot detection middleware:', error);
+    // Continue serving the request even if robot detection fails
+  }
+
+  // If no scrambling/redirect needed, serve static files normally
+  express.static(blogStaticDir)(req, res, next);
+});
 
 // Serve honeypot static files from root
 app.use(express.static(honeypotStaticDir));
