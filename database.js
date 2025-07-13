@@ -7,6 +7,7 @@ class DatabaseAdapter {
     const dbConfig = config?.getDatabaseConfig() || { type: 'sqlite', path: './honeypot.db' };
     this.dbType = dbConfig.type;
     this.dbConfig = dbConfig;
+    this.schemaInitialized = false;
     this.initializeDatabase();
   }
 
@@ -40,7 +41,34 @@ class DatabaseAdapter {
     }
   }
 
-  async query(sql, params = []) {
+  async ensureSchemaInitialized() {
+    if (this.schemaInitialized) {
+      return;
+    }
+
+    try {
+      // Check if schema exists by looking for a key table
+      const checkSQL = this.dbType === 'sqlite'
+        ? "SELECT name FROM sqlite_master WHERE type='table' AND name='known_bad_agents'"
+        : "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name='known_bad_agents'";
+
+      // Use direct query to avoid recursion
+      const result = await this.directQuery(checkSQL);
+      
+      if (result.rows.length === 0) {
+        console.log('Database schema not found. Initializing...');
+        await this.initializeSchema();
+      }
+      
+      this.schemaInitialized = true;
+    } catch (error) {
+      console.error('Error checking/initializing database schema:', error);
+      throw error;
+    }
+  }
+
+  // Direct query method that bypasses schema initialization check
+  async directQuery(sql, params = []) {
     if (this.dbType === 'postgres') {
       return await this.pool.query(sql, params);
     } else {
@@ -65,6 +93,26 @@ class DatabaseAdapter {
         }
       });
     }
+  }
+
+  async initializeSchema() {
+    const DatabaseInitializer = require('./scripts/init-database');
+    const initializer = new DatabaseInitializer(this);
+    await initializer.initializeSchema();
+  }
+
+  // Override query method to ensure schema is initialized
+  async query(sql, params = []) {
+    // Only check schema for non-system queries to avoid infinite recursion
+    const isSystemQuery = sql.includes('sqlite_master') || 
+                         sql.includes('information_schema') || 
+                         sql.includes('PRAGMA');
+    
+    if (!isSystemQuery) {
+      await this.ensureSchemaInitialized();
+    }
+
+    return await this.directQuery(sql, params);
   }
 
   async end() {
