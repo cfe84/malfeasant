@@ -92,7 +92,7 @@ app.use(async (req, res, next) => {
         
         if (result.shouldScramble) {
           console.log(`Serving scrambled content: ${result.redirectReason}`);
-          const scrambledResponse = await contentScrambler.getScrambledResponse(requestPath);
+          const scrambledResponse = await contentScrambler.getScrambledResponse(requestPath, queryParams);
           return res.type(scrambledResponse.contentType).send(scrambledResponse.content);
         } else if (result.shouldRedirect) {
           console.log(`Redirecting request: ${result.redirectReason}`);
@@ -140,7 +140,7 @@ app.use(blogRoutePrefix, async (req, res, next) => {
         
         if (result.shouldScramble) {
           console.log(`Serving scrambled content: ${result.redirectReason}`);
-          const scrambledResponse = await contentScrambler.getScrambledResponse(requestPath);
+          const scrambledResponse = await contentScrambler.getScrambledResponse(requestPath, queryParams);
           return res.type(scrambledResponse.contentType).send(scrambledResponse.content);
         }
       } else {

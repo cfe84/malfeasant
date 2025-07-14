@@ -466,13 +466,6 @@
                 loadGoodAgents();
                 loadHoneypotStatus();
                 loadSettings();
-                // Auto-refresh every 30 seconds
-                setInterval(() => {
-                    loadStats();
-                    loadBadAgents();
-                    loadGoodAgents();
-                    loadHoneypotStatus();
-                }, 30000);
             }
         };
         
@@ -496,14 +489,6 @@
             loadGoodAgents();
             loadHoneypotStatus();
             loadSettings();
-            
-            // Auto-refresh every 30 seconds
-            setInterval(() => {
-                loadStats();
-                loadBadAgents();
-                loadGoodAgents();
-                loadHoneypotStatus();
-            }, 30000);
         }
         
         function showAlert(message, type = 'success') {

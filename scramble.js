@@ -126,9 +126,10 @@ class ContentScrambler {
   /**
    * Attempts to find and scramble the corresponding blog content
    * @param {string} requestPath - The requested path (e.g., '/index.html', '/about.html')
+   * @param {boolean} appendScramble - Whether to append ?scramble to all links
    * @returns {Promise<string|null>} - Scrambled HTML content or null if not found
    */
-  async getScrambledContent(requestPath) {
+  async getScrambledContent(requestPath, appendScramble = false) {
     try {
       // Generate deterministic seed from the request path
       const seed = this.generateSeedFromPath(requestPath);
@@ -181,14 +182,14 @@ class ContentScrambler {
       if (!content) {
         console.log(`No suitable file found for scrambling: ${requestPath}, using default scrambled page`);
         // Return default scrambled page instead of null
-        return this.createDefaultScrambledPage(requestPath);
+        return this.createDefaultScrambledPage(requestPath, appendScramble);
       }
       
       // Scramble the content with deterministic seed
       let scrambledContent = this.scrambleHtmlContent(content, seed);
       
       // Add random blog links at the bottom of the page
-      scrambledContent = this.addRandomBlogLinks(scrambledContent, seed);
+      scrambledContent = this.addRandomBlogLinks(scrambledContent, seed, appendScramble);
       
       console.log(`Served Markov-scrambled content for: ${requestPath} (seed: ${seed.substring(0, 8)}...)`);
       return scrambledContent;
@@ -202,9 +203,10 @@ class ContentScrambler {
   /**
    * Creates a scrambled version of basic HTML content if no specific file exists
    * @param {string} requestPath - The requested path
+   * @param {boolean} appendScramble - Whether to append ?scramble to all links
    * @returns {string} - Basic scrambled HTML page
    */
-  createDefaultScrambledPage(requestPath) {
+  createDefaultScrambledPage(requestPath, appendScramble = false) {
     const seed = this.generateSeedFromPath(requestPath);
     
     // Generate realistic words for the title and content
@@ -223,7 +225,13 @@ class ContentScrambler {
     const paragraphsText = paragraphs.map(p => `<p>${p}</p>`).join('\n\n');
     
     // Generate random blog links
-    const blogLinks = this.generateRandomBlogLinks(seed);
+    const blogLinks = this.generateRandomBlogLinks(seed, appendScramble);
+    
+    // Prepare navigation links with optional scramble parameter
+    const scrambleParam = appendScramble ? '?scramble' : '';
+    const homeLink = `/${scrambleParam}`;
+    const aboutLink = `/about.html${scrambleParam}`;
+    const contactLink = `/contact.html${scrambleParam}`;
     
     return `<!DOCTYPE html>
 <html lang="en">
@@ -286,7 +294,7 @@ class ContentScrambler {
 
         ${paragraphsText}
 
-        <p><a href="/">Return to home</a> | <a href="/about.html">About us</a> | <a href="/contact.html">Contact</a></p>
+        <p><a href="${homeLink}">Return to home</a> | <a href="${aboutLink}">About us</a> | <a href="${contactLink}">Contact</a></p>
         
         <div class="blog-links">
             <h3>Related Articles</h3>
@@ -331,9 +339,10 @@ class ContentScrambler {
   /**
    * Generate random blog links with 4-5 word titles
    * @param {string} seed - Seed for deterministic randomization
+   * @param {boolean} appendScramble - Whether to append ?scramble to all links
    * @returns {string} - HTML list items with blog links
    */
-  generateRandomBlogLinks(seed) {
+  generateRandomBlogLinks(seed, appendScramble = false) {
     const seededRandom = new SeededRandom(seed + '_bloglinks');
     const links = [];
     
@@ -342,8 +351,9 @@ class ContentScrambler {
       const words = this.markovChain.generateWords(wordCount, seed + '_link_' + i);
       const title = words.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
       const url = `/blog/${words.join('-')}/`;
+      const finalUrl = appendScramble ? `${url}?scramble` : url;
       
-      links.push(`<li><a href="${url}">${title}</a></li>`);
+      links.push(`<li><a href="${finalUrl}">${title}</a></li>`);
     }
     
     return links.join('\n                ');
@@ -353,10 +363,11 @@ class ContentScrambler {
    * Add random blog links to existing HTML content
    * @param {string} html - HTML content
    * @param {string} seed - Seed for deterministic randomization
+   * @param {boolean} appendScramble - Whether to append ?scramble to all links
    * @returns {string} - HTML with added blog links
    */
-  addRandomBlogLinks(html, seed) {
-    const blogLinks = this.generateRandomBlogLinks(seed);
+  addRandomBlogLinks(html, seed, appendScramble = false) {
+    const blogLinks = this.generateRandomBlogLinks(seed, appendScramble);
     
     // Find the closing body tag and insert the blog links before it
     const blogLinksHtml = `
@@ -378,11 +389,15 @@ class ContentScrambler {
   /**
    * Main method to get scrambled content for a request
    * @param {string} requestPath - The requested path
+   * @param {Object} queryParams - Query parameters from the request
    * @returns {Promise<{content: string, contentType: string}>} - Scrambled content and type
    */
-  async getScrambledResponse(requestPath) {
+  async getScrambledResponse(requestPath, queryParams = {}) {
+    // Check if scramble parameter is present to append to all links
+    const appendScramble = queryParams.scramble !== undefined;
+    
     // Always get content - either from actual file or default scrambled page
-    const content = await this.getScrambledContent(requestPath);
+    const content = await this.getScrambledContent(requestPath, appendScramble);
     
     return {
       content,
