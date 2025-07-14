@@ -71,14 +71,16 @@ class DatabaseAdapter {
   async directQuery(sql, params = []) {
     // Apply SQL adaptation for database-specific syntax
     const adaptedSQL = this.adaptSQL(sql);
+    // Convert parameter values for database compatibility
+    const adaptedParams = this.adaptParams(params);
     
     if (this.dbType === 'postgres') {
-      return await this.pool.query(adaptedSQL, params);
+      return await this.pool.query(adaptedSQL, adaptedParams);
     } else {
       // SQLite
       return new Promise((resolve, reject) => {
         if (adaptedSQL.trim().toUpperCase().startsWith('SELECT') || adaptedSQL.trim().toUpperCase().startsWith('WITH')) {
-          this.db.all(adaptedSQL, params, (err, rows) => {
+          this.db.all(adaptedSQL, adaptedParams, (err, rows) => {
             if (err) {
               reject(err);
             } else {
@@ -86,7 +88,7 @@ class DatabaseAdapter {
             }
           });
         } else {
-          this.db.run(adaptedSQL, params, function(err) {
+          this.db.run(adaptedSQL, adaptedParams, function(err) {
             if (err) {
               reject(err);
             } else {
@@ -145,7 +147,10 @@ class DatabaseAdapter {
         .replace(/BOOLEAN/g, 'INTEGER')
         .replace(/\$(\d+)/g, '?') // Convert $1, $2 to ?
         .replace(/ON CONFLICT \([^)]+\) DO UPDATE SET/g, 'ON CONFLICT DO UPDATE SET')
-        .replace(/ON CONFLICT \([^)]+\) DO NOTHING/g, 'ON CONFLICT DO NOTHING');
+        .replace(/ON CONFLICT \([^)]+\) DO NOTHING/g, 'ON CONFLICT DO NOTHING')
+        // Convert PostgreSQL boolean literals to SQLite integers
+        .replace(/= true\b/g, '= 1')
+        .replace(/= false\b/g, '= 0');
     } else if (this.dbType === 'postgres') {
       // Convert SQLite-specific syntax to PostgreSQL
       let adaptedSQL = sql
@@ -154,7 +159,12 @@ class DatabaseAdapter {
         .replace(/TEXT/g, 'TEXT') // TEXT is valid in both
         .replace(/INSERT OR IGNORE/g, 'INSERT')
         .replace(/ON CONFLICT DO UPDATE SET/g, 'ON CONFLICT DO UPDATE SET')
-        .replace(/ON CONFLICT DO NOTHING/g, 'ON CONFLICT DO NOTHING');
+        .replace(/ON CONFLICT DO NOTHING/g, 'ON CONFLICT DO NOTHING')
+        // Convert SQLite integer literals to PostgreSQL booleans for known boolean columns
+        .replace(/was_request_redirected = 1\b/g, 'was_request_redirected = true')
+        .replace(/was_request_redirected = 0\b/g, 'was_request_redirected = false')
+        .replace(/is_active = 1\b/g, 'is_active = true')
+        .replace(/is_active = 0\b/g, 'is_active = false');
       
       // Convert ? placeholders to $1, $2, etc. for PostgreSQL
       let paramIndex = 1;
@@ -163,6 +173,26 @@ class DatabaseAdapter {
       return adaptedSQL;
     }
     return sql;
+  }
+
+  // Convert parameter values between PostgreSQL and SQLite
+  adaptParams(params) {
+    if (!params || params.length === 0) {
+      return params;
+    }
+
+    return params.map(param => {
+      if (this.dbType === 'postgres') {
+        // Convert SQLite-style integers to PostgreSQL booleans
+        if (param === 1) return true;
+        if (param === 0) return false;
+      } else if (this.dbType === 'sqlite') {
+        // Convert PostgreSQL-style booleans to SQLite integers
+        if (param === true) return 1;
+        if (param === false) return 0;
+      }
+      return param;
+    });
   }
 
   // Helper method to execute adapted SQL
