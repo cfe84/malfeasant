@@ -406,7 +406,7 @@ class RobotDetector {
         throw new Error('User agent is required');
       }
 
-      if (db.dbType === 'sqlite') {
+      if (this.db.dbType === 'sqlite') {
         await this.db.query(
           'INSERT OR REPLACE INTO known_bad_agents (user_agent, is_active) VALUES (?, ?)',
           [userAgent, 1]
@@ -462,7 +462,7 @@ class RobotDetector {
         throw new Error('Agent ID is required');
       }
 
-      const activeValue = db.dbType === 'sqlite' ? (isActive ? 1 : 0) : isActive;
+      const activeValue = this.db.dbType === 'sqlite' ? (isActive ? 1 : 0) : isActive;
       await this.db.query('UPDATE known_bad_agents SET is_active = ? WHERE id = ?', [activeValue, id]);
       
       // Refresh the known agents cache
@@ -483,7 +483,7 @@ class RobotDetector {
         throw new Error('User agent is required');
       }
 
-      if (db.dbType === 'sqlite') {
+      if (this.db.dbType === 'sqlite') {
         await this.db.query(
           'INSERT OR REPLACE INTO known_good_agents (user_agent, is_active) VALUES (?, ?)',
           [userAgent, 1]
@@ -539,7 +539,7 @@ class RobotDetector {
         throw new Error('Agent ID is required');
       }
 
-      const activeValue = db.dbType === 'sqlite' ? (isActive ? 1 : 0) : isActive;
+      const activeValue = this.db.dbType === 'sqlite' ? (isActive ? 1 : 0) : isActive;
       await this.db.query('UPDATE known_good_agents SET is_active = ? WHERE id = ?', [activeValue, id]);
       
       // Refresh the known agents cache
