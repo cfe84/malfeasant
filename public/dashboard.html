@@ -456,8 +456,36 @@
     <script>
         let apiSecret = localStorage.getItem('honeypotApiSecret');
         
+        // Check for scramble parameter in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const hasScrambleParam = urlParams.has('scramble');
+        
+        // Function to add scramble parameter to URLs when needed
+        function addScrambleParam(url) {
+            if (!hasScrambleParam) return url;
+            
+            const separator = url.includes('?') ? '&' : '?';
+            return url + separator + 'scramble';
+        }
+        
+        // Update all links on the page to include scramble parameter
+        function updateLinksWithScramble() {
+            if (!hasScrambleParam) return;
+            
+            // Update any existing links
+            document.querySelectorAll('a[href]').forEach(link => {
+                const href = link.getAttribute('href');
+                if (href && !href.startsWith('#') && !href.includes('scramble')) {
+                    link.setAttribute('href', addScrambleParam(href));
+                }
+            });
+        }
+        
         // Check if API secret is set on page load
         window.onload = function() {
+            // Update any links with scramble parameter if present
+            updateLinksWithScramble();
+            
             if (apiSecret) {
                 document.getElementById('apiKeyForm').style.display = 'none';
                 document.getElementById('dashboardContent').style.display = 'block';
@@ -466,6 +494,9 @@
                 loadGoodAgents();
                 loadHoneypotStatus();
                 loadSettings();
+                
+                // Update links after content is loaded
+                updateLinksWithScramble();
             }
         };
         
@@ -504,13 +535,16 @@
         }
         
         async function apiRequest(url, options = {}) {
+            // Add scramble parameter to API requests if present in current URL
+            const finalUrl = addScrambleParam(url);
+            
             const headers = {
                 'Content-Type': 'application/json',
                 'X-API-Secret': apiSecret,
                 ...options.headers
             };
             
-            const response = await fetch(url, {
+            const response = await fetch(finalUrl, {
                 ...options,
                 headers
             });

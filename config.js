@@ -35,7 +35,7 @@ class Config {
       publicDir: this.resolvePath(process.env.PUBLIC_DIR || 'public'),
       honeypotStaticDir: this.resolvePath(process.env.HONEYPOT_STATIC_DIR || 'public'),
       blogStaticDir: this.resolvePath(process.env.BLOG_STATIC_DIR || 'blog'),
-      custom404Page: process.env.CUSTOM_404_PAGE ? this.resolvePath(process.env.CUSTOM_404_PAGE) : null
+      custom404Page: process.env.CUSTOM_404_PAGE ? path.join(process.env.BLOG_STATIC_DIR, process.env.CUSTOM_404_PAGE) : null
     };
 
     // Route configuration
