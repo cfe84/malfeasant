@@ -69,13 +69,16 @@ class DatabaseAdapter {
 
   // Direct query method that bypasses schema initialization check
   async directQuery(sql, params = []) {
+    // Apply SQL adaptation for database-specific syntax
+    const adaptedSQL = this.adaptSQL(sql);
+    
     if (this.dbType === 'postgres') {
-      return await this.pool.query(sql, params);
+      return await this.pool.query(adaptedSQL, params);
     } else {
       // SQLite
       return new Promise((resolve, reject) => {
-        if (sql.trim().toUpperCase().startsWith('SELECT') || sql.trim().toUpperCase().startsWith('WITH')) {
-          this.db.all(sql, params, (err, rows) => {
+        if (adaptedSQL.trim().toUpperCase().startsWith('SELECT') || adaptedSQL.trim().toUpperCase().startsWith('WITH')) {
+          this.db.all(adaptedSQL, params, (err, rows) => {
             if (err) {
               reject(err);
             } else {
@@ -83,7 +86,7 @@ class DatabaseAdapter {
             }
           });
         } else {
-          this.db.run(sql, params, function(err) {
+          this.db.run(adaptedSQL, params, function(err) {
             if (err) {
               reject(err);
             } else {
@@ -112,6 +115,7 @@ class DatabaseAdapter {
       await this.ensureSchemaInitialized();
     }
 
+    // directQuery already handles SQL adaptation
     return await this.directQuery(sql, params);
   }
 
@@ -138,6 +142,7 @@ class DatabaseAdapter {
         .replace(/SERIAL PRIMARY KEY/g, 'INTEGER PRIMARY KEY AUTOINCREMENT')
         .replace(/TIMESTAMP DEFAULT CURRENT_TIMESTAMP/g, 'DATETIME DEFAULT CURRENT_TIMESTAMP')
         .replace(/INET/g, 'TEXT')
+        .replace(/BOOLEAN/g, 'INTEGER')
         .replace(/\$(\d+)/g, '?') // Convert $1, $2 to ?
         .replace(/ON CONFLICT \([^)]+\) DO UPDATE SET/g, 'ON CONFLICT DO UPDATE SET')
         .replace(/ON CONFLICT \([^)]+\) DO NOTHING/g, 'ON CONFLICT DO NOTHING');
