@@ -130,7 +130,14 @@ class RobotDetector {
 
   // Check if user agent is in known good agents list
   isKnownGoodAgent(userAgent) {
-    return this.knownGoodAgents.has(userAgent.toLowerCase());
+    const lowercaseUserAgent = userAgent.toLowerCase();
+    // Check if any of the known good agent patterns are contained in the user agent
+    for (const goodAgent of this.knownGoodAgents) {
+      if (lowercaseUserAgent.includes(goodAgent)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // Check rate limits for a user using in-memory storage

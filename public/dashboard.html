@@ -601,17 +601,17 @@
                 function getAgentStatus(userAgent) {
                     const ua = userAgent.toLowerCase();
                     
-                    // Check if it matches any bad agent pattern
-                    for (let badPattern of badAgents) {
-                        if (ua.includes(badPattern)) {
-                            return 'bad';
-                        }
-                    }
-                    
-                    // Check if it matches any good agent pattern
+                    // Check if it matches any good agent pattern FIRST (same order as backend)
                     for (let goodPattern of goodAgents) {
                         if (ua.includes(goodPattern)) {
                             return 'good';
+                        }
+                    }
+                    
+                    // Then check if it matches any bad agent pattern
+                    for (let badPattern of badAgents) {
+                        if (ua.includes(badPattern)) {
+                            return 'bad';
                         }
                     }
                     
