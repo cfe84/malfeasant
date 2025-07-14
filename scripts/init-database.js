@@ -73,7 +73,7 @@ class DatabaseInitializer {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`;
 
-    await this.db.execSQL(sql);
+    await this.db.directQuery(this.db.adaptSQL(sql));
     console.log('✓ Created request_logs table');
   }
 
@@ -94,7 +94,7 @@ class DatabaseInitializer {
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`;
 
-    await this.db.execSQL(sql);
+    await this.db.directQuery(this.db.adaptSQL(sql));
     console.log('✓ Created known_good_agents table');
   }
 
@@ -115,7 +115,7 @@ class DatabaseInitializer {
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`;
 
-    await this.db.execSQL(sql);
+    await this.db.directQuery(this.db.adaptSQL(sql));
     console.log('✓ Created settings table');
   }
 
@@ -128,7 +128,7 @@ class DatabaseInitializer {
     ];
 
     for (const indexSQL of indexes) {
-      await this.db.execSQL(indexSQL);
+      await this.db.directQuery(this.db.adaptSQL(indexSQL));
     }
     console.log('✓ Created performance indexes');
   }
@@ -172,7 +172,7 @@ class DatabaseInitializer {
 
     for (const agent of badAgents) {
       const activeValue = this.db.dbType === 'sqlite' ? 1 : true;
-      await this.db.execSQL(insertSQL, [agent, activeValue]);
+      await this.db.directQuery(this.db.adaptSQL(insertSQL), [agent, activeValue]);
     }
     console.log(`✓ Added ${badAgents.length} default bad user agents`);
   }
@@ -194,7 +194,7 @@ class DatabaseInitializer {
 
     for (const agent of goodAgents) {
       const activeValue = this.db.dbType === 'sqlite' ? 1 : true;
-      await this.db.execSQL(insertSQL, [agent, activeValue]);
+      await this.db.directQuery(this.db.adaptSQL(insertSQL), [agent, activeValue]);
     }
     console.log(`✓ Added ${goodAgents.length} default good user agents`);
   }
@@ -214,7 +214,7 @@ class DatabaseInitializer {
       : 'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING';
 
     for (const [key, value] of defaultSettings) {
-      await this.db.execSQL(insertSQL, [key, value]);
+      await this.db.directQuery(this.db.adaptSQL(insertSQL), [key, value]);
     }
     console.log(`✓ Added ${defaultSettings.length} default settings`);
   }
@@ -225,7 +225,7 @@ class DatabaseInitializer {
         ? "SELECT name FROM sqlite_master WHERE type='table' AND name='known_bad_agents'"
         : "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name='known_bad_agents'";
 
-      const result = await this.db.query(checkSQL);
+      const result = await this.db.directQuery(checkSQL);
       return result.rows.length > 0;
     } catch (error) {
       console.error('Error checking schema existence:', error);

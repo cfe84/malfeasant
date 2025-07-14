@@ -39,7 +39,7 @@ async function addMissingColumns(db) {
       ? "PRAGMA table_info(request_logs)"
       : "SELECT column_name FROM information_schema.columns WHERE table_name='request_logs' AND column_name='block_reason'";
     
-    const result = await db.query(checkColumn);
+    const result = await db.directQuery(checkColumn);
     
     let hasBlockReason = false;
     if (db.dbType === 'sqlite') {
@@ -51,7 +51,7 @@ async function addMissingColumns(db) {
     
     if (!hasBlockReason) {
       console.log('Adding block_reason column to request_logs table...');
-      await db.execSQL('ALTER TABLE request_logs ADD COLUMN block_reason TEXT');
+      await db.directQuery(db.adaptSQL('ALTER TABLE request_logs ADD COLUMN block_reason TEXT'));
       console.log('✓ Added block_reason column');
     } else {
       console.log('✓ block_reason column already exists');
@@ -83,7 +83,7 @@ async function showDatabaseState(db) {
     
     for (const table of tables) {
       try {
-        const result = await db.query(`SELECT COUNT(*) as count FROM ${table.name}`);
+        const result = await db.directQuery(`SELECT COUNT(*) as count FROM ${table.name}`);
         console.log(`- ${table.description}: ${result.rows[0].count} records`);
       } catch (error) {
         console.log(`- ${table.description}: Table missing or error`);
@@ -93,7 +93,7 @@ async function showDatabaseState(db) {
     // Show some sample settings
     console.log('\nCurrent Settings:');
     try {
-      const settings = await db.query('SELECT key, value FROM settings ORDER BY key');
+      const settings = await db.directQuery('SELECT key, value FROM settings ORDER BY key');
       settings.rows.forEach(setting => {
         console.log(`  ${setting.key}: ${setting.value}`);
       });

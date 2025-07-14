@@ -130,7 +130,7 @@ class DatabaseAdapter {
     }
   }
 
-  // Convert PostgreSQL syntax to SQLite where needed
+  // Convert SQL syntax between PostgreSQL and SQLite
   adaptSQL(sql) {
     if (this.dbType === 'sqlite') {
       // Convert PostgreSQL-specific syntax to SQLite
@@ -141,6 +141,21 @@ class DatabaseAdapter {
         .replace(/\$(\d+)/g, '?') // Convert $1, $2 to ?
         .replace(/ON CONFLICT \([^)]+\) DO UPDATE SET/g, 'ON CONFLICT DO UPDATE SET')
         .replace(/ON CONFLICT \([^)]+\) DO NOTHING/g, 'ON CONFLICT DO NOTHING');
+    } else if (this.dbType === 'postgres') {
+      // Convert SQLite-specific syntax to PostgreSQL
+      let adaptedSQL = sql
+        .replace(/INTEGER PRIMARY KEY AUTOINCREMENT/g, 'SERIAL PRIMARY KEY')
+        .replace(/DATETIME DEFAULT CURRENT_TIMESTAMP/g, 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+        .replace(/TEXT/g, 'TEXT') // TEXT is valid in both
+        .replace(/INSERT OR IGNORE/g, 'INSERT')
+        .replace(/ON CONFLICT DO UPDATE SET/g, 'ON CONFLICT DO UPDATE SET')
+        .replace(/ON CONFLICT DO NOTHING/g, 'ON CONFLICT DO NOTHING');
+      
+      // Convert ? placeholders to $1, $2, etc. for PostgreSQL
+      let paramIndex = 1;
+      adaptedSQL = adaptedSQL.replace(/\?/g, () => `$${paramIndex++}`);
+      
+      return adaptedSQL;
     }
     return sql;
   }
