@@ -375,8 +375,9 @@ class RobotDetector {
       const recentRequests = await this.db.query(`
         SELECT ip_address, user_agent, request_url, was_request_redirected, block_reason, created_at 
         FROM request_logs 
+        WHERE request_url NOT LIKE '/api/%'
         ORDER BY created_at DESC 
-        LIMIT 20
+        LIMIT 50
       `);
 
       return {
