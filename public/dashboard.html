@@ -654,7 +654,7 @@
                     row.insertCell(0).textContent = new Date(request.created_at).toLocaleString();
                     row.insertCell(1).textContent = request.ip_address;
                     row.insertCell(2).textContent = request.request_url;
-                    row.insertCell(3).textContent = request.user_agent.substring(0, 50) + '...';
+                    row.insertCell(3).textContent = request.user_agent;
                     
                     const statusCell = row.insertCell(4);
                     statusCell.textContent = request.was_request_redirected ? 'BLOCKED' : 'ALLOWED';
