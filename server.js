@@ -90,7 +90,10 @@ app.use(async (req, res, next) => {
       if (robotDetector.isHtmlRequest(requestPath) && (requestPath.startsWith('/api/') || requestPath === '/dashboard.html' || requestPath === '/dashboard')) {
         const result = await robotDetector.getContent(requestPath, userAgent, ipAddress, referrer, queryParams);
         
-        if (result.shouldScramble) {
+        // Don't scramble the dashboard even if scramble parameter is present
+        const isDashboard = requestPath === '/dashboard.html' || requestPath === '/dashboard';
+        
+        if (result.shouldScramble && !isDashboard) {
           console.log(`Serving scrambled content: ${result.redirectReason}`);
           const scrambledResponse = await contentScrambler.getScrambledResponse(requestPath, queryParams);
           return res.type(scrambledResponse.contentType).send(scrambledResponse.content);
@@ -138,7 +141,10 @@ app.use(blogRoutePrefix, async (req, res, next) => {
       if (robotDetector.isHtmlRequest(requestPath)) {
         const result = await robotDetector.getContent(requestPath, userAgent, ipAddress, referrer, queryParams);
         
-        if (result.shouldScramble) {
+        // Don't scramble the dashboard even if scramble parameter is present
+        const isDashboard = requestPath === '/dashboard.html' || requestPath === '/dashboard';
+        
+        if (result.shouldScramble && !isDashboard) {
           console.log(`Serving scrambled content: ${result.redirectReason}`);
           const scrambledResponse = await contentScrambler.getScrambledResponse(requestPath, queryParams);
           return res.type(scrambledResponse.contentType).send(scrambledResponse.content);
