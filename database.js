@@ -158,6 +158,8 @@ class DatabaseAdapter {
         .replace(/DATETIME DEFAULT CURRENT_TIMESTAMP/g, 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
         .replace(/TEXT/g, 'TEXT') // TEXT is valid in both
         .replace(/INSERT OR IGNORE/g, 'INSERT')
+        .replace(/INSERT OR REPLACE/g, 'INSERT')
+        .replace(/datetime\('now'\)/g, 'CURRENT_TIMESTAMP')
         .replace(/ON CONFLICT DO UPDATE SET/g, 'ON CONFLICT DO UPDATE SET')
         .replace(/ON CONFLICT DO NOTHING/g, 'ON CONFLICT DO NOTHING')
         // Convert SQLite integer literals to PostgreSQL booleans for known boolean columns

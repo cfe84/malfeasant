@@ -270,10 +270,23 @@ class RobotDetector {
   async setHoneypotStatus(enabled) {
     try {
       const value = enabled ? 'true' : 'false';
-      await this.db.query(`
-        INSERT OR REPLACE INTO settings (key, value, updated_at) 
-        VALUES ('honeypot_enabled', ?, datetime('now'))
-      `, [value]);
+      
+      if (this.db.dbType === 'sqlite') {
+        await this.db.query(`
+          INSERT OR REPLACE INTO settings (key, value, updated_at) 
+          VALUES ('honeypot_enabled', ?, datetime('now'))
+        `, [value]);
+      } else {
+        // PostgreSQL
+        await this.db.query(`
+          INSERT INTO settings (key, value, updated_at) 
+          VALUES ('honeypot_enabled', ?, CURRENT_TIMESTAMP)
+          ON CONFLICT (key) DO UPDATE SET 
+            value = EXCLUDED.value, 
+            updated_at = CURRENT_TIMESTAMP
+        `, [value]);
+      }
+      
       console.log(`Honeypot ${enabled ? 'enabled' : 'disabled'}`);
       return true;
     } catch (error) {
@@ -299,10 +312,21 @@ class RobotDetector {
 
   async setSetting(key, value) {
     try {
-      await this.db.query(`
-        INSERT OR REPLACE INTO settings (key, value, updated_at) 
-        VALUES (?, ?, datetime('now'))
-      `, [key, value]);
+      if (this.db.dbType === 'sqlite') {
+        await this.db.query(`
+          INSERT OR REPLACE INTO settings (key, value, updated_at) 
+          VALUES (?, ?, datetime('now'))
+        `, [key, value]);
+      } else {
+        // PostgreSQL
+        await this.db.query(`
+          INSERT INTO settings (key, value, updated_at) 
+          VALUES (?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT (key) DO UPDATE SET 
+            value = EXCLUDED.value, 
+            updated_at = CURRENT_TIMESTAMP
+        `, [key, value]);
+      }
       return true;
     } catch (error) {
       console.error(`Error setting ${key}:`, error);
