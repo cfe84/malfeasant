@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const config = require('./config');
-const RobotDetector = require('./robot');
+const RobotDetector = require('./RobotDetectorV2');
 const ContentScrambler = require('./scramble');
 
 const app = express();

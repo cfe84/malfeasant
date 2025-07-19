@@ -8,7 +8,10 @@
         "dev": "nodemon server.js",
         "setup-db": "node scripts/setup-db.js",
         "migrate-db": "node scripts/migrate.js",
-        "test-db": "node scripts/test-init.js"
+        "test-db": "node scripts/test-init.js",
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "test:coverage": "jest --coverage"
     },
     "dependencies": {
         "cors": "^2.8.5",
@@ -20,6 +23,7 @@
         "sqlite3": "^5.1.7"
     },
     "devDependencies": {
+        "jest": "^30.0.4",
         "nodemon": "^3.0.2"
     },
     "keywords": [

@@ -586,19 +586,22 @@
                 const goodAgents = new Set();
                 
                 badAgentsData.badAgents?.forEach(agent => {
-                    if (agent.is_active) {
+                    if (agent.is_active && agent.user_agent) {
                         badAgents.add(agent.user_agent.toLowerCase());
                     }
                 });
                 
                 goodAgentsData.goodAgents?.forEach(agent => {
-                    if (agent.is_active) {
+                    if (agent.is_active && agent.user_agent) {
                         goodAgents.add(agent.user_agent.toLowerCase());
                     }
                 });
                 
                 // Function to determine agent status
                 function getAgentStatus(userAgent) {
+                    if (!userAgent) {
+                        return 'unknown';
+                    }
                     const ua = userAgent.toLowerCase();
                     
                     // Check if it matches any good agent pattern FIRST (same order as backend)
@@ -631,7 +634,7 @@
                 userAgentsTable.innerHTML = '';
                 data.topUserAgents.forEach(agent => {
                     const row = userAgentsTable.insertRow();
-                    row.insertCell(0).textContent = agent.user_agent;
+                    row.insertCell(0).textContent = agent.user_agent || 'Unknown';
                     row.insertCell(1).textContent = agent.count;
                     
                     const statusCell = row.insertCell(2);
