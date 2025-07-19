@@ -78,11 +78,33 @@ class RequestLogService {
         LIMIT 50
       `);
 
+      // Get top blocked user agents
+      const topBlockedUserAgents = await this.database.query(`
+        SELECT user_agent, COUNT(*) as count 
+        FROM request_logs 
+        WHERE was_request_redirected = 1 AND user_agent IS NOT NULL
+        GROUP BY user_agent 
+        ORDER BY count DESC 
+        LIMIT 10
+      `);
+
+      // Get top blocked IPs
+      const topBlockedIPs = await this.database.query(`
+        SELECT ip_address, COUNT(*) as count 
+        FROM request_logs 
+        WHERE was_request_redirected = 1 AND ip_address IS NOT NULL
+        GROUP BY ip_address 
+        ORDER BY count DESC 
+        LIMIT 10
+      `);
+
       return {
         totalRequests: parseInt(totalRequests.rows[0].count),
         blockedRequests: parseInt(blockedRequests.rows[0].count),
         blockReasons: blockReasons.rows,
         topUserAgents: topUserAgents.rows,
+        topBlockedUserAgents: topBlockedUserAgents.rows,
+        topBlockedIPs: topBlockedIPs.rows,
         recentRequests: recentRequests.rows
       };
     } catch (error) {

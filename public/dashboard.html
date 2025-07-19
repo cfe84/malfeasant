@@ -386,6 +386,33 @@
                 </table>
             </div>
             
+            <h2>Top Blocked User Agents</h2>
+            <div class="table-container">
+                <table id="blockedUserAgentsTable">
+                    <thead>
+                        <tr>
+                            <th>User Agent</th>
+                            <th>Blocked Count</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            
+            <h2>Top Blocked IP Addresses</h2>
+            <div class="table-container">
+                <table id="blockedIPsTable">
+                    <thead>
+                        <tr>
+                            <th>IP Address</th>
+                            <th>Blocked Count</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            
             <h2>Recent Requests</h2>
             <div class="table-container">
                 <table id="recentRequestsTable">
@@ -648,6 +675,39 @@
                         statusCell.innerHTML = '<span class="agent-status-unknown">UNKNOWN</span>';
                     }
                 });
+                
+                // Update top blocked user agents table
+                const blockedUserAgentsTable = document.getElementById('blockedUserAgentsTable').getElementsByTagName('tbody')[0];
+                blockedUserAgentsTable.innerHTML = '';
+                if (data.topBlockedUserAgents) {
+                    data.topBlockedUserAgents.forEach(agent => {
+                        const row = blockedUserAgentsTable.insertRow();
+                        row.insertCell(0).textContent = agent.user_agent || 'Unknown';
+                        row.insertCell(1).textContent = agent.count;
+                        
+                        const statusCell = row.insertCell(2);
+                        const status = getAgentStatus(agent.user_agent);
+                        
+                        if (status === 'good') {
+                            statusCell.innerHTML = '<span class="agent-status-good">GOOD</span>';
+                        } else if (status === 'bad') {
+                            statusCell.innerHTML = '<span class="agent-status-bad">BAD</span>';
+                        } else {
+                            statusCell.innerHTML = '<span class="agent-status-unknown">UNKNOWN</span>';
+                        }
+                    });
+                }
+                
+                // Update top blocked IPs table
+                const blockedIPsTable = document.getElementById('blockedIPsTable').getElementsByTagName('tbody')[0];
+                blockedIPsTable.innerHTML = '';
+                if (data.topBlockedIPs) {
+                    data.topBlockedIPs.forEach(ip => {
+                        const row = blockedIPsTable.insertRow();
+                        row.insertCell(0).textContent = ip.ip_address;
+                        row.insertCell(1).textContent = ip.count;
+                    });
+                }
                 
                 // Update recent requests table
                 const recentRequestsTable = document.getElementById('recentRequestsTable').getElementsByTagName('tbody')[0];
